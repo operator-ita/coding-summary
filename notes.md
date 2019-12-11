@@ -224,3 +224,8 @@ $ docker image ls
 docker rmi [id]
 ```
 ### Understanding Image Layers
+...
+
+You can inspect which files have been pulled up to the container level with the docker diff command. 
+
+you can use the docker image history command of the Python image you created.
