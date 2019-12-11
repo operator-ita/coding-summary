@@ -229,3 +229,12 @@ docker rmi [id]
 You can inspect which files have been pulled up to the container level with the docker diff command. 
 
 you can use the docker image history command of the Python image you created.
+
+### Summary 
+
+- Use the Dockerfile to create reproducible builds for your application and to integrate your application with Docker into the CI/CD pipeline.
+- Docker images can be made available to all of your environments through a central registry. The Docker Hub is one example of a registry, but you can deploy your own registry on servers you control.
+- A Docker image contains all the dependencies that it needs to run an application within the image. This is useful because you no longer need to deal with environment drift (version differences) when you rely on dependencies that are installed on every environment you deploy to.
+- Docker uses of the union file system and "copy-on-write" to reuse layers of images. This lowers the footprint of storing images and significantly increases the performance of starting containers.
+- Image layers are cached by the Docker build and push system. There's no need to rebuild or repush image layers that are already present on a system.
+- Each line in a Dockerfile creates a new layer, and because of the layer cache, the lines that change more frequently, for example, adding source code to an image, should be listed near the bottom of the file.
