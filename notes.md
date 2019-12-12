@@ -207,7 +207,7 @@ if __name__ == "__main__":
 2 - **Rebuild**  the app by using your Docker Hub username in the build command:
 
 ```bash
-docker image build -t [dockerhub username]/[image name]
+docker image build -t [dockerhub username]/[image name] .
 ```
 
 - Some layers displays "Using cache" , these layers of the Docker image have already been built, and the `docker image build` command will use these layers from the cache instead of rebuilding them.
