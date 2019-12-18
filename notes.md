@@ -1,5 +1,4 @@
 # Docker 
-
 - Docker makes it easier to package applications and add to CI/CD pipelines.
 - Docker simplifies container technology to make creating and running containers easier. 
 - Docker helps you package dependencies with containers. 
@@ -207,7 +206,7 @@ if __name__ == "__main__":
 2 - **Rebuild**  the app by using your Docker Hub username in the build command:
 
 ```bash
-docker image build -t [dockerhub username]/[image name] .
+docker image build -t [dockerhub username]/[image name]
 ```
 
 - Some layers displays "Using cache" , these layers of the Docker image have already been built, and the `docker image build` command will use these layers from the cache instead of rebuilding them.
@@ -224,17 +223,300 @@ $ docker image ls
 docker rmi [id]
 ```
 ### Understanding Image Layers
+
 ...
 
-You can inspect which files have been pulled up to the container level with the docker diff command. 
+You can inspect which files have been pulled up to the container level with the `docker diff` command. 
 
-you can use the docker image history command of the Python image you created.
+you can use the `docker image history` command of the Python image you created.
 
-### Summary 
+## Container Orchestration 
 
-- Use the Dockerfile to create reproducible builds for your application and to integrate your application with Docker into the CI/CD pipeline.
-- Docker images can be made available to all of your environments through a central registry. The Docker Hub is one example of a registry, but you can deploy your own registry on servers you control.
-- A Docker image contains all the dependencies that it needs to run an application within the image. This is useful because you no longer need to deal with environment drift (version differences) when you rely on dependencies that are installed on every environment you deploy to.
-- Docker uses of the union file system and "copy-on-write" to reuse layers of images. This lowers the footprint of storing images and significantly increases the performance of starting containers.
-- Image layers are cached by the Docker build and push system. There's no need to rebuild or repush image layers that are already present on a system.
-- Each line in a Dockerfile creates a new layer, and because of the layer cache, the lines that change more frequently, for example, adding source code to an image, should be listed near the bottom of the file.
+Commond problems for  running Dockerized applications in production are: Scheduling services across distributed nodes, Maintaining high avaibility, Implementation reconciliation, Scaling, Loggin, Service descovery, Zero Downtime Deployments, Fault Tolerance, A/B Deployments. 
+
+Containers oschestration helps you with:  Cluster Management, Scheduling, Service discovery, Replication, Health management, Declare Desire State (Active reconcilation). table 
+
+Container ecosystem layers 
+| Layer | Description | Software |
+|:-------:|:-------------------------------------------:|:-----------------------------------:|
+| Layer 6 | Development Workflow Opinionated Containers | DEIS, OPENSHIT |
+| Layer 5 | Orquestration/Scheduling Service Model | Kubernets, Docker Swarm, MESOS, MARATHON |
+| Layer 4 | Container Engine | Docker, Rocket, OSv |
+| Layer 3 | Operating System | Ubuntu, Redhat, CoreOS |
+| Layer 2 | Virtual Infrastructure | vmware, AmazonWebServices |
+| Layer 1 | Physical Infraestructure | Raw Compute, Network, Storage  |
+### Create Swarm with workers 
+
+0 - Create virtual machines with *VirutalMachine* and *docker-machine*  
+
+```bash
+$ docker-machine create node1
+$ docker-machine create node2
+$ docker-machine create node3
+```
+
+To access a *VirtualMachine* use the command 
+
+```bash
+$ docker-machine ssh node1 
+```
+
+1 - Initialize a Swarm in node 1: 
+
+```bash
+$ docker swarm init --advertise-addr eth0
+Swarm initialized: current node (qybg0qy8aqe6sewpotaotwxnm) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-5uuifm5ze6qu9e0hy6e750frqdvbiu6fku7v6c8wi3f47ez02x-bkc3wwmz5cfh2e9nimbkcqzpx 192.168.0.33:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+```
+
+- `--advertise-addr` Specifies the address in which the other nodes will use to join the swarm
+- `docker swarm init`  generates a join token. You need to use this token to join the other nodes to the swarm. 
+
+2 - Paste the token given above in node2 and node3 to add workers 
+
+```bash
+$   docker swarm join --token SWMTKN-1-5uuifm5ze6qu9e0hy6e750frqdvbiu6fku7v6c8wi3f47ez02x-bkc3wwmz5cfh2e9nimbkcqzpx 192.168.0.33:2377
+This node joined a swarm as a worker.
+```
+
+3 - Verify the `three-node-closter` back on node1 by listing existing nodes 
+
+```bash 
+$ docker node ls 
+ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS      ENGINE VERSION
+qybg0qy8aqe6sewpotaotwxnm *   node1               Ready               Active              Leader              19.03.4
+pr60yx9e4ucin04zrvbrmcpbt     node2               Ready               Active                                  19.03.4
+qwva3mm0tmfl20m8633o3zc6e     node3               Ready               Active                                  19.03.4
+```
+
+- The asterisk (*) next to the ID of the node represents the node that handled that specific command. 
+
+- Managers handle commands and manage the state of the swarm. Workers cannot handle commands and are simply used to run containers at scale.  By default, managers are also used to run containers.
+
+  **Note:** Although you control the swarm directly from the  node in which its running, you can control a Docker swarm remotely by  connecting to the Docker Engine of the manager by using the remote API or by activating a remote host from your local Docker installation  (using the `$DOCKER_HOST` and `$DOCKER_CERT_PATH`  environment variables). This will become useful when you want to remotely control production applications, instead of using SSH to  directly control production servers.
+
+### Deploy a Service 
+
+1 - Deploy a service by using NGINX: 
+
+```bash 
+$ docker service create --detach=true --name nginx1 --publish 80:80  --mount source=/etc/hostname,target=/usr/share/nginx/html/index.html,type=bind,ro nginx:1.12
+pgqdxr41dpy8qwkn6qm7vke0q
+```
+
+- `--mount`  is useful to have NGINX print out the hostname of the node it's running on. You will use this later in this lab when you start load balancing  between multiple containers of NGINX that are distributed across  different nodes in the cluster and you want to see which node in the swarm is serving the request.
+- `--publish` Command uses the swarm's built-in routing mesh. In this case, port 80 is exposed on every node in
+   the swarm. The routing mesh will route a request coming in on port 80 to one of the nodes running the container.
+
+2 - Inspect the service. 
+
+```bash
+$ docker service ls 
+ID                  NAME                MODE                REPLICAS            IMAGE               PORTS
+qd8feg8n0qha        nginx1              replicated          1/1                 nginx:1.12          *:80->80/tcp
+```
+
+3 - Check the running container of the service.
+
+```bash
+$ docker service ps nginx1
+```
+
+- If you know which node your container is running on (you can see which node based on the output from `docker service ps`), you can use the command `docker container ls` to see the container running on that specific node.
+
+4 - Test the service 
+
+Because of the routing mesh, you can send a request to any node of the swarm on port 80. This request will be automatically routed to the one node that is running the NGINX container.
+
+Try this command on each node:
+
+```bash
+$ curl localhost:80
+node1
+```
+
+Curling will output the hostname where the container is running. For this example, it is running on node1, but yours might be different.
+
+### Scale your service 
+
+In production, you might need to handle large amounts of traffic to your application, so you'll learn how to scale.
+
+1. Update your service with an updated number of replicas.
+
+   Use the `docker service` command to update the NGINX service that you created previously to include 5 replicas. This is defining a new state for the service.
+
+   ```bash
+   $ docker service update --replicas=5 --detach=true nginx1 
+   nginx1
+
+   ```
+
+   When this command is run, the following events occur:
+
+   - The state of the service is updated to 5 replicas, which is stored in the swarm's internal storage.
+   - Docker Swarm recognizes that the number of replicas that is scheduled now does not match the declared state of 5.
+   - Docker Swarm schedules 4 more tasks (containers) in an attempt to meet the declared state for the service.
+
+   This swarm is actively checking to see if the desired state is equal to actual state and will attempt to reconcile if needed.
+
+   -------------------
+
+   Is also possible use the command `scale` ? 
+
+   ```bash
+   $ docker service scale nginx1=5 
+   ```
+
+   ​
+
+2. Check the running instances.
+
+   After a few seconds, you should see that the swarm did its job and successfully started 4 more containers. Notice that the containers are scheduled across all three nodes of the cluster. The default placement strategy that is used to decide where new containers are to be run is the emptiest node, but that can be changed based on your needs.
+
+   ```bash
+   $ docker service ps nginx1
+
+   ```
+
+   ![img](https://courses.cognitiveclass.ai/asset-v1:IBMDeveloperSkillsNetwork+CO0101EN+v1+type@asset+block/lab3-scale_2.png)
+
+3. Send a lot of requests to http://localhost:80.
+
+   The `--publish 80:80` parameter is still in effect for this service; that was not changed when you ran the `docker service update` command. However, now when you send requests on port 80, the routing mesh has multiple containers in which to route requests to. The routing mesh acts as a load balancer for these containers, alternating where it routes requests to.
+
+   Try it out by curling multiple times. Note that it doesn't matter which node you send the requests. There is no connection between the node that receives the request and the node that that request is routed to.
+
+   ```
+   $ curl localhost:80
+   node3
+   $ curl localhost:80
+   node3
+   $ curl localhost:80
+   node2
+   $ curl localhost:80
+   node1
+   $ curl localhost:80
+   node1
+
+   ```
+
+   You should see which node is serving each request because of the useful `--mount` command you used earlier.
+
+   **Limits of the routing mesh:** The routing mesh can publish only one service on port 80. If you want multiple services exposed on port 80, you can use an external application load balancer outside of the swarm to accomplish this.
+
+4. Check the aggregated logs for the service.
+
+   Another easy way to see which nodes those requests were routed to is to check the aggregated logs. You can get aggregated logs for the service by using the command `docker service logs [service name]`. This aggregates the output from every running container, that is, the output from `docker container logs [container name]`.
+
+   ```bash
+   $ docker service logs nginx1
+
+   ```
+
+   ![img](https://courses.cognitiveclass.ai/asset-v1:IBMDeveloperSkillsNetwork+CO0101EN+v1+type@asset+block/lab3-scale_4.png)
+
+   Based on these logs, you can see that each request was served by a different container.
+
+   In addition to seeing whether the request was sent to node1, node2, or node3, you can also see which container on each node that it was sent to. For example, `nginx1.5` means that request was sent to a container with that same name as indicated in the output of the command `docker service ps nginx1`.
+
+###  Apply rolling updates
+
+Now that you have your service deployed, you'll see a release of your application. You are going to update the version of NGINX to version 1.13.
+
+1. Run the `docker service update` command:
+
+   ```bash
+   $ docker service update --image nginx:1.13 --detach=true nginx1
+
+   ```
+
+   This triggers a rolling update of the swarm. Quickly enter the command `docker service ps nginx1` over and over to see the updates in real time.
+
+   You can fine-tune the rolling update by using these options:
+
+   - `--update-parallelism`: specifies the number of containers to update immediately (defaults to 1).
+   - `--update-delay:` specifies the delay between finishing updating a set of containers before moving on to the next set.
+
+2. After a few seconds, run the command `docker service ps nginx1` to see all the images that have been updated to nginx:1.13.
+
+   ```bash
+   $ docker service ps nginx1
+
+   ```
+
+   ![img](https://courses.cognitiveclass.ai/asset-v1:IBMDeveloperSkillsNetwork+CO0101EN+v1+type@asset+block/lab3-rolling_updates_0.png)
+
+   You have successfully updated your application to the latest version of NGINX.
+
+### Reconcile problems with containers
+
+In the previous section, you updated the state of your service by using the command `docker service update`. You saw Docker Swarm in action as it recognized the mismatch between desired state and actual state, and attempted to solve the issue.
+
+The inspect-and-then-adapt ** model of Docker Swarm enables it to perform reconciliation when something goes wrong. For example, when a node in the swarm goes down, it might take down running containers with it. The swarm will recognize this loss of containers and will attempt to reschedule containers on available nodes to achieve the desired state for that service.
+
+You are going to remove a node and see tasks of your nginx1 service be rescheduled on other nodes automatically.
+
+1. To get a clean output, create a new service by copying the following line. Change the name and the publish port to avoid conflicts with your existing service. Also, add the 
+
+   ```bash
+   --replicas
+   ```
+
+    option to scale the service with five instances:
+
+   ```bash
+   $ docker service create --detach=true --name nginx2 --replicas=5 --publish 81:80  --mount source=/etc/hostname,target=/usr/share/nginx/html/index.html,type=bind,ro nginx:1.12
+   aiqdh5n9fyacgvb2g82s412js
+
+   ```
+
+2. On node1, use the ` watch` utility to watch the update from the output of the  command: 
+
+   ```bash
+   $ docker service ps
+   ```
+
+   **Tip:** `watch` is a Linux utility and might not be available on other operating systems.
+
+   ```bash 
+   $ watch -n 1 docker service ps nginx2
+
+   ```
+
+   This command should create output like this:
+
+   ![img](https://courses.cognitiveclass.ai/asset-v1:IBMDeveloperSkillsNetwork+CO0101EN+v1+type@asset+block/lab3-reconcile_2.png)
+
+3. Click node3 and enter the command to leave the swarm cluster:
+
+   ```bash
+   $ docker swarm leave
+
+   ```
+
+   **Tip**: This is the typical way to leave the swarm, but you can also kill the node and the behavior will be the same.
+
+4. Click node1 to watch the reconciliation in action. You should see that the swarm attempts to get back to the declared state by rescheduling the containers that were running on node3 to node1 and node2 automatically.
+
+   ![img](https://courses.cognitiveclass.ai/asset-v1:IBMDeveloperSkillsNetwork+CO0101EN+v1+type@asset+block/lab3-reconcile_4.png)
+
+### Determine how many nodes you need
+
+In this lab, your Docker Swarm cluster consists of one master and two worker nodes. This configuration is not highly available. The manager node contains the necessary information to manage the cluster, but if this node goes down, the cluster will cease to function. For a production application, you should provision a cluster with multiple manager nodes to allow for manager node failures.
+
+You should have at least three manager nodes but typically no more than seven. Manager nodes implement the raft consensus algorithm, which requires that more than 50% of the nodes agree on the state that is being stored for the cluster. If you don't achieve more than 50% agreement, the swarm will cease to operate correctly. For this reason, note the following guidance for node failure tolerance:
+
+- Three manager nodes tolerate one node failure.
+- Five manager nodes tolerate two node failures.
+- Seven manager nodes tolerate three node failures.
+
+It is possible to have an even number of manager nodes, but it adds no value in terms of the number of node failures. For example, four manager nodes will tolerate only one node failure, which is the same tolerance as a three-manager node cluster. However, the more manager nodes you have, the harder it is to achieve a consensus on the state of a cluster.
+
+While you typically want to limit the number of manager nodes to no more than seven, you can scale the number of worker nodes much higher than that. Worker nodes can scale up into the thousands of nodes. Worker nodes communicate by using the gossip protocol, which is optimized to be perform well under a lot of traffic and a large number of nodes.
+
+If you are using Play-with-Docker, you can easily deploy multiple manager node clusters by using the built in templates. Click the **Templates** icon in the upper left to view the available templates.
