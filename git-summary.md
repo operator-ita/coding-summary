@@ -1,5 +1,14 @@
 # Github Basic Conceps 
 
+## Add User and Password 
+Run the command 
+```
+git config --global user.name "operator-ita" 
+```
+Confirm 
+```
+git config --global user.name
+```
 ## Create a new repository 
 ```
 git clone /path/to/repository 
