@@ -9,6 +9,10 @@ Confirm
 ```
 git config --global user.name
 ```
+## Add and existing remote 
+```
+git remote add origin https://github.com/USER/PROJECT
+```
 ## Create a new repository 
 ```
 git clone /path/to/repository 
